@@ -1,0 +1,52 @@
+# Pliki tymczasowe i buforowane
+*.bak
+*.bck
+*.tmp
+*.swp
+
+# Pliki automatycznie generowane przez KiCad
+*.kicad_prl
+*.net
+*.xml
+*.csv
+*.tmp
+*.zip
+*.dcm
+*.sch-bak
+*.kicad_sch-bak
+*.kicad_pcb-bak
+
+# Pliki z wynikami symulacji, analiz, eksportów
+*.raw
+*.log
+*.asc
+*.plt
+*.ps
+*.pdf
+*.svg
+*.dxf
+*.gbr
+*.gbrjob
+*.gtp
+*.gts
+*.gtl
+*.gbl
+*.gbo
+*.gbs
+*.gko
+*.drill
+*.drl
+*.zip
+*.step
+*.stp
+*.iges
+*.iges.gz
+
+# Pliki związane z pracą edytorów
+*.autosave
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db

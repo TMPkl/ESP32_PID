@@ -1,0 +1,34 @@
+# === PlatformIO / VSCode ===
+
+# Dane budowania
+.pio/
+.pioenvs/
+.build/
+
+# Pliki konfiguracyjne VSCode
+.vscode/
+
+# Pliki cache, logi i tymczasowe
+*.pyc
+*.pyo
+*.pyd
+*.orig
+*.log
+*.bak
+*.tmp
+*.swp
+
+# Pliki systemowe
+.DS_Store
+Thumbs.db
+
+# Testowe pliki binarne lub firmware
+*.elf
+*.bin
+*.hex
+*.map
+
+# Środowiska wirtualne (jeśli używane)
+.venv/
+venv/
+env/

@@ -1,6 +1,9 @@
+#include "driver/spi_master.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_err.h"
+#include "esp_heap_caps.h" // jeśli korzystasz z pamięci DMA
 #include "max31865.h"
-#include "driver/gpio.h"
-#include "esp_log.h"
 
 #define TAG "MAX31865"
 
@@ -9,23 +12,18 @@
 #define MAX31865_RTD_LSB_REG 0x02
 #define MAX31865_FAULT_REG   0x07
 
-#define PT1000_TYPE 0
-#define PT100_TYPE 1   
-#define PT500_TYPE 2
     
-static spi_device_handle_t spi;
+static spi_device_handle_t spi = NULL; // Handle for the SPI device
 static int pt_type; 
-static int R_ref; // Reference resistance for PT1000, PT100, or PT500
-static gpio_num_t cs; // Chip select pin
-esp_err_t max31865_init(spi_host_device_t host, int pt_type_, int R_ref_, struct max31865_pinout pinout) {
+
+
+esp_err_t max31865_init(spi_host_device_t host, int pt_type_, max31865_pinout_t pinout) {
     pt_type = pt_type_;
-    R_ref = R_ref_;
-    cs = pinout.cs;
 
     spi_bus_config_t buscfg = {
-        .mosi_io_num = pinout.mosi,
-        .miso_io_num = pinout.miso,
-        .sclk_io_num = pinout.sck,
+        .mosi_io_num = pinout.spi_pinout.mosi,
+        .miso_io_num = pinout.spi_pinout.miso,
+        .sclk_io_num = pinout.spi_pinout.sck,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
         .max_transfer_sz = 0
@@ -34,7 +32,7 @@ esp_err_t max31865_init(spi_host_device_t host, int pt_type_, int R_ref_, struct
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = 1 * 1000 * 1000,
         .mode = 1,
-        .spics_io_num = cs,
+        .spics_io_num = pinout.cs,
         .queue_size = 1,
     };
 
@@ -44,7 +42,7 @@ esp_err_t max31865_init(spi_host_device_t host, int pt_type_, int R_ref_, struct
     ret = spi_bus_add_device(host, &devcfg, &spi);
     if (ret != ESP_OK) return ret;
 
-    uint8_t config = 0b11000010;
+    uint8_t config = 0b11000010;  // Configuration register: VBIAS ON + Auto conversion + filtr 50 Hz + tryb 2 przewody
     uint8_t data[2] = {MAX31865_CONFIG_REG & 0x7F, config};
 
     spi_transaction_t t = {
@@ -82,11 +80,33 @@ uint16_t max31865_read_rtd_raw() {
     return ((msb << 8) | lsb) >> 1;
 }
 
-float max31865_read_temperature() {
+double max31865_read_temperature() {
+    #define A  3.9083e-3
+    #define B -5.775e-7
+    #define C -4.183e-12
+
+    #define R0 500.0f
     uint16_t rtd = max31865_read_rtd_raw();
-    float resistance = rtd * R_ref / 32768.0; // dla Rref = 400Ω
-    float temp = (resistance - 100.0) / 0.385; // dla PT100//////////////////////////////////////todo, dopisać poprawną kalkulację dla róznych typów czujników
-    return temp;
+
+    double t = (rtd / R0 - 1) / A;
+    double t_prev;
+    int max_iter = 10;
+    double epsilon = 1e-5;  
+
+    for (int i = 0; i < max_iter; i++) {
+        t_prev = t;
+
+        double f = R0 * (1 + A * t + B * t * t + C * (t - 100) * t * t * t) - rtd;
+
+        double df = R0 * (A + 2 * B * t + C * (4 * t * t - 300 * t + 30000));
+
+        t = t - f / df;
+
+        if (fabs(t - t_prev) < epsilon) {
+            break;  // zbieżność osiągnięta
+        }
+    }
+    return t;
 }
 
 uint8_t max31865_read_fault() {

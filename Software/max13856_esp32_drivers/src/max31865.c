@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include "esp_err.h"
 #include "esp_heap_caps.h" // jeśli korzystasz z pamięci DMA
+#include <math.h>
 #include "max31865.h"
 
 #define TAG "MAX31865"
@@ -80,32 +81,26 @@ uint16_t max31865_read_rtd_raw() {
     return ((msb << 8) | lsb) >> 1;
 }
 
-double max31865_read_temperature() {
+float max31865_read_temperature() {
+    // PT500, Rref = 2000 Ohm
     #define A  3.9083e-3
     #define B -5.775e-7
-    #define C -4.183e-12
-
     #define R0 500.0f
+    #define RREF 2000.0f
+
     uint16_t rtd = max31865_read_rtd_raw();
+    float resistance = ((float)rtd * RREF) / 32768.0f;
 
-    double t = (rtd / R0 - 1) / A;
-    double t_prev;
-    int max_iter = 10;
-    double epsilon = 1e-5;  
+    // Solve quadratic: R = R0 * (1 + A*t + B*t^2)
+    // => B*t^2 + A*t + (1 - R/R0) = 0
+    float a = B;
+    float b = A;
+    float c = 1.0f - (resistance / R0);
 
-    for (int i = 0; i < max_iter; i++) {
-        t_prev = t;
+    float discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) return -999.0f; // error
 
-        double f = R0 * (1 + A * t + B * t * t + C * (t - 100) * t * t * t) - rtd;
-
-        double df = R0 * (A + 2 * B * t + C * (4 * t * t - 300 * t + 30000));
-
-        t = t - f / df;
-
-        if (fabs(t - t_prev) < epsilon) {
-            break;  // zbieżność osiągnięta
-        }
-    }
+    float t = (-b + sqrtf(discriminant)) / (2 * a);
     return t;
 }
 
